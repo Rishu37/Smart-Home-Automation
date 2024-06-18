@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home Controls</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f7f7f7;
+            color: #333;
+        }
+
+        #fanSpeedContainer {
+            display: none;
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #routinesContainer {
+            margin-top: 20px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        label {
+            margin-right: 15px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        input[type="range"] {
+            width: 20%;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        li {
+            margin-bottom: 10px;
+            padding: 10px;
+            padding: 10px 20%;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        li span {
+            font-weight: bold;
+        }
+
+        button.deleteButton {
+            padding: 6px 12px;
+            background-color: #dc3545;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 1%;
+        }
+
+        button.deleteButton:hover {
+            background-color: #c82333;
+        }
+        .sensors{
+            display: flex;
+            justify-content: space-around;
+        }
+        /* Responsive Styling */
+        @media (max-width: 768px) {
+
+            input[type="text"],
+            input[type="number"],
+            select {
+                width: 100%;
+                max-width: none;
+                /* Remove max-width on smaller screens */
+            }
+
+            li {
+                display: block;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Veronica Controls</h2>
+
+    <!-- Control Devices -->
+    <div>
+        <h3>Control Devices:</h3>
+        <label><input type="checkbox" id="lightCheckbox" onclick="toggleControl('light')" /> Light</label>
+        <label><input type="checkbox" id="fanCheckbox" onclick="toggleControl('fan')" /> Fan</label>
+        <div id="fanSpeedContainer">
+            <label>Fan Speed:</label>
+            <input type="range" id="fanSpeedSlider" min="1" max="5" step="1" value="3"
+                onchange="updateFanSpeed(this.value)" />
+        </div>
+    </div>
+
+    <div id="sensorDataContainer">
+        <h3>Sensor Data:</h3>
+        <div class="sensors">
+            <p><strong>Voltage:</strong> <span id="voltageValue">Loading...</span> V</p>
+            <p><strong>Amperage:</strong> <span id="amperageValue">Loading...</span> A</p>
+            <!-- <p><strong>Watts:</strong> <span id="wattsValue">Loading...</span> W</p> -->
+        </div>
+    </div>
+
+    <!-- Current Routines -->
+    <div id="routinesContainer">
+        <h3>Current Routines:</h3>
+        <ul id="routinesList"></ul>
+        <form id="addRoutineForm">
+            <label for="timeInput">Time (HHMM):</label>
+            <input type="text" id="timeInput" required pattern="[0-9]{4}"
+                title="Enter time in HHMM format (e.g., 1327)" />
+            <br><br>
+            <label for="deviceInput">Device:</label>
+            <select id="deviceInput" required onchange="toggleSpeedInput()">
+                <option value="Light">Light</option>
+                <option value="Fan">Fan</option>
+            </select>
+            <br><br>
+            <label for="actionInput">Action:</label>
+            <select id="actionInput" required onchange="toggleSpeedInput()">
+                <option value="On">On</option>
+                <option value="Off">Off</option>
+            </select>
+            <br><br>
+            <label for="speedInput" id="speedLabel">Speed (1-100):</label>
+            <input type="number" id="speedInput" min="1" max="100" />
+            <br><br>
+            <button type="button" onclick="addRoutine()">Add Routine</button>
+        </form>
+    </div>
+
+    <script>
+
+function updateSensorValues(sensorData) {
+            // Extract sensor values from the received data
+            const { voltage, amperage, watts } = sensorData;
+
+            // Update the HTML elements with the new sensor values
+            document.getElementById('voltageValue').textContent = voltage;
+            document.getElementById('amperageValue').textContent = amperage;
+            // document.getElementById('wattsValue').textContent = watts;
+        }
+
+        // Function to periodically fetch sensor data from the server
+        async function fetchSensorData() {
+            console.log("Fetching sensor data");
+            try {
+                const response = await fetch('http://192.168.225.133/reqdata', {
+                    method: 'GET'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch sensor data');
+                }
+
+                const sensorData = await response.json();
+                updateSensorValues(sensorData); // Update HTML with received sensor data
+            } catch (error) {
+                console.error('Error fetching sensor data:', error);
+            }
+        }
+        setInterval(fetchSensorData, 10000);
+        fetchSensorData();
+
+
+        interpretAction = (actionCode) => {
+            const parts = actionCode.split('_');
+            const deviceType = parts[0];
+            const deviceId = parts[1];
+            const action = parts[2];
+            const value = parts[3];
+
+            switch (deviceType) {
+                case 'F':
+                    if (action === 'ON') {
+                        return `Turn on Fan ${deviceId} speed ${value}%`;
+                    } else if (action === 'OFF') {
+                        return `Turn off Fan ${deviceId}`;
+                    }
+                    break;
+                case 'L':
+                    if (action === 'ON') {
+                        return `Turn on Light ${deviceId}`;
+                    } else if (action === 'OFF') {
+                        return `Turn off Light ${deviceId}`;
+                    }
+                    break;
+                case 'SP':
+                    return `Set Speaker Volume to ${value}%`;
+                default:
+                    return '';
+            }
+        };
+
+        function toggleSpeedInput() {
+            const device = document.getElementById('deviceInput').value;
+            const action = document.getElementById('actionInput').value;
+            const speedInput = document.getElementById('speedInput');
+            const speedLabel = document.getElementById('speedLabel');
+
+            if (device === 'Fan' && action === 'On') {
+                speedInput.style.display = 'inline-block';
+                speedLabel.style.display = 'inline-block';
+            } else {
+                speedInput.style.display = 'none';
+                speedLabel.style.display = 'none';
+            }
+        }
+
+        async function addRoutine() {
+            const time = document.getElementById('timeInput').value;
+            const device = document.getElementById('deviceInput').value;
+            const action = document.getElementById('actionInput').value;
+            const speed = document.getElementById('speedInput').value;
+
+            const newRoutine = {
+                room: 1, // Example room number (adjust as needed)
+                time,
+                device,
+                action,
+                speed
+            };
+
+            await sendRoutineData(newRoutine);
+        }
+
+        async function sendRoutineData(routine) {
+            try {
+                const response = await fetch('/submitroutines', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(routine)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to add routine');
+                }
+
+                console.log('Routine added successfully');
+                // Refresh routines display after adding
+                location.reload();
+            } catch (error) {
+                console.error('Error adding routine:', error);
+            }
+        }
+
+        async function toggleControl(device) {
+            const checkbox = document.getElementById(device + 'Checkbox');
+            const fanSpeedContainer = document.getElementById('fanSpeedContainer');
+
+            if (device === 'fan') {
+                fanSpeedContainer.style.display = checkbox.checked ? 'block' : 'none';
+            }
+
+            const controlData = { device, action: checkbox.checked ? 'On' : 'Off' };
+            await sendControlData(controlData);
+        }
+
+        async function updateFanSpeed(speedValue) {
+            const controlData = { device: 'fan', action: 'On', speed: speedValue };
+            await sendControlData(controlData);
+        }
+
+        async function sendControlData(data) {
+            try {
+                const response = await fetch('/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to send control data');
+                }
+
+                console.log(`Control (${data.device}) toggled successfully`);
+            } catch (error) {
+                console.error('Error sending control data:', error);
+            }
+        }
+
+        async function deleteRoutine(time) {
+            const routineToDelete = { time };
+
+            try {
+                const response = await fetch('/deleteroutine', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(routineToDelete)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete routine');
+                }
+
+                console.log('Routine deleted successfully');
+                // Refresh routines display after deletion
+                location.reload();
+            } catch (error) {
+                console.error('Error deleting routine:', error);
+            }
+        }
+
+        // Function to display existing routines on the HTML page
+        function displayRoutines(routines) {
+            const routinesList = document.getElementById('routinesList');
+            routinesList.innerHTML = '';
+
+            Object.keys(routines).forEach((time) => {
+                const actions = routines[time].map(action => interpretAction(action));
+                const listItem = document.createElement('li');
+                listItem.innerHTML = `<div><span>${time}</span></div>: <div class="actions">${actions.join(', ')}</div> <div><button class="deleteButton" onclick="deleteRoutine('${time}')">Delete</button></div>`;
+                routinesList.appendChild(listItem);
+            });
+        }
+
+        // Initialize the page with existing routines
+        displayRoutines({{ ROUTINES }});
+    </script>
+</body>
+
+</html>
